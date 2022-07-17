@@ -1,0 +1,9 @@
+---
+BasedOnStyle: Microsoft
+ColumnLimit: 110
+DerivePointerAlignment: false
+PointerAlignment: Left
+DeriveLineEnding: false
+UseCRLF: false
+Cpp11BracedListStyle: false
+...
