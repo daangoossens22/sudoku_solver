@@ -1,14 +1,18 @@
-.PHONY: build build-debug run run-debug clean
+.PHONY: setup setup-debug build build-debug run run-debug clean
 
 BUILD_FOLDER_RELEASE = build
 BUILD_FOLDER_DEBUG = build_debug
 
-build:
+setup:
 	meson $(BUILD_FOLDER_RELEASE) --buildtype=release
+
+setup-debug:
+	meson $(BUILD_FOLDER_DEBUG) --buildtype=debug
+
+build: setup
 	meson compile -C $(BUILD_FOLDER_RELEASE)
 
-build-debug:
-	meson $(BUILD_FOLDER_DEBUG) --buildtype=debug
+build-debug: setup-debug
 	meson compile -C $(BUILD_FOLDER_DEBUG)
 
 run: build
