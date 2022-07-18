@@ -32,7 +32,7 @@ board parse_sudoku(const std::string& grid)
     return res;
 }
 
-std::string board_to_str(const board& b)
+std::string board_to_str(const board& b, bool debug = false)
 {
     std::stringstream ss;
     std::stringstream ss_meta;
@@ -40,36 +40,26 @@ std::string board_to_str(const board& b)
     {
         if (i != 0)
         {
-            if (i % (BLOCK_WIDTH * NUMBER_RANGE) == 0)
-            {
-                ss << "\n---|---|---";
-            }
+            if (i % (BLOCK_WIDTH * NUMBER_RANGE) == 0) ss << "\n---|---|---";
             if (i % NUMBER_RANGE == 0)
             {
-                // ss << '\n';
-                ss << ss_meta.str() << '\n';
-                ss_meta.str(std::string());
+                if (debug)
+                {
+                    ss << ss_meta.str();
+                    ss_meta.str(std::string());
+                }
+                ss << '\n';
             }
-            else if (i % 3 == 0)
-            {
-                ss << '|';
-            }
+            else if (i % 3 == 0) ss << '|';
         }
-        // ss << ((b[i].count() == 1) ? (char)(std::bit_width(b[i].to_ulong()) + '0') : '.');
-        if (b[i].count() == 1)
-        {
-            ss << std::bit_width(b[i].to_ulong());
-        }
+        if (b[i].count() == 1) ss << std::bit_width(b[i].to_ulong());
         else
         {
             ss << '.';
             ss_meta << " { ";
             for (size_t x = 0; x < NUMBER_RANGE; ++x)
             {
-                if ((b[i].to_ulong() >> x) & 1)
-                {
-                    ss_meta << x + 1 << " ";
-                }
+                if ((b[i].to_ulong() >> x) & 1) ss_meta << x + 1 << " ";
             }
             ss_meta << "}";
         }
@@ -94,56 +84,80 @@ bool solve_sudoku(board& b)
     auto multiple_bits_set = [](const cell& i) -> bool { return i.count() > 1; };
     // auto set_bits = std::views::all(b2) | std::views::filter(one_bit_set);
 
+    auto get_row_idx = [](size_t i) -> size_t { return i / NUMBER_RANGE; };
+    auto get_col_idx = [](size_t i) -> size_t { return i % NUMBER_RANGE; };
+    auto get_box_idx = [](size_t row, size_t col) -> size_t {
+        size_t box_row = row / BLOCK_WIDTH;
+        size_t box_col = col / BLOCK_WIDTH;
+        return box_col + (box_row * BLOCK_WIDTH);
+    };
+
     // std::cout << board_to_str(b) << "\n" << std::endl;
 
-    for (size_t i = 0; i < b2.size(); ++i)
+    bool repeat = true;
+    while (repeat)
     {
-        if (one_bit_set(b2[i]))
+        repeat = false;
+        for (size_t i = 0; i < b2.size(); ++i)
         {
-            auto cell_info = [](size_t i) -> std::array<size_t, 3> {
-                size_t row = i / NUMBER_RANGE;
-                size_t col = i % NUMBER_RANGE;
-                size_t box_row = row / BLOCK_WIDTH;
-                size_t box_col = col / BLOCK_WIDTH;
-                size_t box_id = box_col + (box_row * 3);
-
-                // prune rows
-                // prune colums
-                // prune cell
-                return { row, col, box_id };
-            };
-            auto cur_cell_info = cell_info(i);
-
-            auto affected_cells =
-                std::views::iota(0, (int)NUM_BOARD_CELLS) |
-                std::views::filter([i](int x) { return x != (int)i; }) |
-                std::views::filter([cur_cell_info, cell_info](int x) {
-                    auto cur = cell_info((size_t)x);
-                    std::vector<bool> equal_elem;
-                    std::ranges::transform(cur, cur_cell_info, std::back_inserter(equal_elem),
-                                           std::equal_to<>());
-                    return std::ranges::find(equal_elem, true) != equal_elem.end();
-                    // return std::ranges::any_of(equal_elem, [](bool el) { return el; });
-                });
-            for (int x : affected_cells)
+            size_t cur_row = get_row_idx(i);
+            size_t cur_col = get_col_idx(i);
+            size_t cur_box = get_box_idx(cur_row, cur_col);
+            enum Area
             {
-                b2[x] &= (~b2[i]);
+                ROW,
+                COLUMN,
+                BOX,
+                ALL_OF_THE_ABOVE
+            };
+            auto get_view = [&](Area a) {
+                return std::views::iota(0, (int)NUM_BOARD_CELLS) |
+                       std::views::filter([i](int x) { return x != (int)i; }) |
+                       std::views::filter([=](int x) {
+                           size_t r = get_row_idx(x);
+                           size_t c = get_col_idx(x);
+                           size_t b = get_box_idx(r, c);
+                           if (a == Area::ROW) return r == cur_row;
+                           else if (a == Area::COLUMN) return c == cur_col;
+                           else if (a == Area::BOX) return b == cur_box;
+                           else return r == cur_row || c == cur_col || b == cur_box;
+                       });
+            };
+            if (one_bit_set(b2[i]))
+            {
+                size_t idx = std::bit_width(b2[i].to_ulong()) - 1;
+                for (int x : get_view(Area::ALL_OF_THE_ABOVE))
+                {
+                    // b2[x] &= (~b2[i]);
+                    repeat |= b2[x].test(idx);
+                    b2[x].reset(idx);
+                }
+            }
+            else
+            {
+                // if the cell contains a value, which is already ruled out for all cells in the
+                // row or column or box, then that cell must have that value
+                auto check_only_possibility = [&](Area a) {
+                    cell temp = { b2[i] };
+                    for (int x : get_view(a)) temp &= (~b2[x]);
+                    if (one_bit_set(temp))
+                    {
+                        b2[i] = temp;
+                        return true;
+                    }
+                    return false;
+                };
+
+                bool changed = check_only_possibility(Area::ROW) || check_only_possibility(Area::COLUMN) ||
+                               check_only_possibility(Area::BOX);
+                repeat |= changed;
             }
         }
-        else
-        {
-            // TODO: check if this cell contains a possible number that is not defined in the row, column or
-            // its box_id
-        }
     }
-    // std::cout << board_to_str(b2) << "\n" << std::endl;
 
     // step 2.
     // only when a domain is empty
-    if (std::ranges::any_of(b2, no_bit_set))
-    {
-        return false;
-    }
+    if (std::ranges::any_of(b2, no_bit_set)) return false;
 
     // step 3
     if (std::ranges::all_of(b2, one_bit_set))

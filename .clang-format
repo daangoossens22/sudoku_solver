@@ -6,4 +6,6 @@ PointerAlignment: Left
 DeriveLineEnding: false
 UseCRLF: false
 Cpp11BracedListStyle: false
+AllowShortIfStatementsOnASingleLine: AllIfsAndElse
+AllowShortLoopsOnASingleLine: true
 ...
