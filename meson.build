@@ -6,5 +6,5 @@ if get_option('buildtype') == 'release'
     add_project_arguments('-DNDEBUG', language: 'cpp')
 endif
 
-executable('sudoku_solver', 'main.cpp')
-# executable('sudoku_solver_old', 'scratch/sudoku_solver.cpp')
+executable('sudoku_solver', 'src/main.cpp')
+executable('sudoku_solver_old', 'scratch/sudoku_solver.cpp')
